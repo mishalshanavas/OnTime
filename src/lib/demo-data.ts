@@ -31,14 +31,14 @@ export type MetroDemoData = {
 };
 
 const stations: Station[] = [
-  "Vyttila",
-  "Edapally",
-  "MG Road",
   "Aluva",
+  "Edapally",
   "Palarivattom",
   "Kaloor",
-  "Kadavanthra",
   "Ernakulam South",
+  "Kadavanthra",
+  "Vyttila",
+  "MG Road",
 ];
 
 function pair(boarding: Station, destination: Station): RouteKey {
@@ -51,9 +51,8 @@ function routeSeconds(boarding: Station, destination: Station) {
     return 0;
   }
 
-  // DEMO DATA — replace with live KMRL feed in production.
-  // Fast values keep the hackathon demo moving while preserving the visible countdown behavior.
-  return Math.max(90, distance * 120);
+  // TESTING — short timers for quick iteration.
+  return Math.max(8, distance * 12);
 }
 
 const countdownSecondsByRoute = stations.reduce(
@@ -70,7 +69,7 @@ export const metroDemoData: MetroDemoData = {
   stations,
   countdownSecondsByRoute,
   // DEMO DATA — hardcoded stage trigger. Production should derive this from prep time and live ETA.
-  triggerThresholdSeconds: 60,
+  triggerThresholdSeconds: 5,
   // DEMO DATA — hardcoded cart item so judges see a deterministic flow.
   product: "banana chips",
   // DEMO DATA — replace with user-entered or profile-backed delivery locations in production.

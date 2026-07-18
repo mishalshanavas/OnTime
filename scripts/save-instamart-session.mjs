@@ -5,7 +5,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { chromium } from "playwright";
 
 const storageStatePath = path.resolve(process.cwd(), process.env.INSTAMART_STORAGE_STATE ?? "storageState.json");
-const instamartUrl = process.env.INSTAMART_URL ?? "https://www.swiggy.com/instamart";
+const instamartUrl = process.env.INSTAMART_URL ?? "https://instamart.in/";
 
 const browser = await chromium.launch({
   headless: false,
@@ -15,6 +15,8 @@ const browser = await chromium.launch({
 
 const context = await browser.newContext({
   viewport: null,
+  permissions: ["geolocation"],
+  geolocation: { latitude: 9.9312, longitude: 76.2673 },
   ...(existsSync(storageStatePath) ? { storageState: storageStatePath } : {}),
 });
 

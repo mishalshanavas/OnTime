@@ -17,7 +17,16 @@ function shouldUseDemoMode() {
   return process.env.DEMO_MODE === "true";
 }
 
-function playDemoVideoFallback(destination: Station, message: string) {
+const DEMO_CHECKOUT_STEPS = [
+  { label: "Opening Instamart…", delay: 800 },
+  { label: "Searching for item…", delay: 1200 },
+  { label: "Adding to cart…", delay: 1000 },
+  { label: "Proceeding to checkout…", delay: 1500 },
+  { label: "Confirming delivery address…", delay: 1200 },
+  { label: "Reached payment screen ✓", delay: 1300 },
+] as const;
+
+function simulateDemoCheckout(destination: Station, message: string) {
   const videoUrl = process.env.DEMO_VIDEO_URL ?? "/demo/instamart-fallback.mp4";
 
   setOrderStatus({
@@ -28,24 +37,48 @@ function playDemoVideoFallback(destination: Station, message: string) {
     mode: "demo-video",
     startedAt: new Date().toISOString(),
     videoUrl,
-  });
+    checkoutStep: 0,
+    checkoutTotalSteps: DEMO_CHECKOUT_STEPS.length,
+  } as OrderStatus);
 
-  // DEMO STUB — simulates the pre-recorded checkout reaching payment.
-  windowlessDelay(7_000).then(() => {
+  let stepIndex = 0;
+  function advanceStep() {
+    if (stepIndex >= DEMO_CHECKOUT_STEPS.length) return;
+    const step = DEMO_CHECKOUT_STEPS[stepIndex];
+    stepIndex++;
+
     setOrderStatus({
-      phase: "success",
-      message: "Demo video reached the payment screen. Payment was not submitted.",
+      phase: "demo-video",
+      message: step.label,
       product: metroDemoData.product,
       destination,
       mode: "demo-video",
-      completedAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
       videoUrl,
-    });
-  });
-}
+      checkoutStep: stepIndex,
+      checkoutTotalSteps: DEMO_CHECKOUT_STEPS.length,
+    } as OrderStatus);
 
-function windowlessDelay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+    if (stepIndex < DEMO_CHECKOUT_STEPS.length) {
+      setTimeout(advanceStep, DEMO_CHECKOUT_STEPS[stepIndex].delay);
+    } else {
+      setTimeout(() => {
+        setOrderStatus({
+          phase: "success",
+          message: "Checkout reached the payment screen. Payment was not submitted.",
+          product: metroDemoData.product,
+          destination,
+          mode: "demo-video",
+          completedAt: new Date().toISOString(),
+          videoUrl,
+          checkoutStep: DEMO_CHECKOUT_STEPS.length,
+          checkoutTotalSteps: DEMO_CHECKOUT_STEPS.length,
+        } as OrderStatus);
+      }, 500);
+    }
+  }
+
+  setTimeout(advanceStep, DEMO_CHECKOUT_STEPS[0].delay);
 }
 
 export async function POST(request: NextRequest) {
@@ -62,28 +95,55 @@ export async function POST(request: NextRequest) {
   }
 
   if (shouldUseDemoMode()) {
-    playDemoVideoFallback(destination, "DEMO_MODE is true. Playing the recorded checkout fallback.");
+    simulateDemoCheckout(destination, "DEMO_MODE is true. Simulating Instamart checkout…");
     return NextResponse.json({ ok: true, status: getOrderStatus() });
   }
 
   const run = (async () => {
+    // Map agent steps → frontend checkout step indices
+    const STEP_MAP: Record<string, number> = {
+      init: 0,
+      search: 1,
+      "add-to-cart": 2,
+      checkout: 3,
+      address: 4,
+      payment: 5,
+      done: 6,
+    };
+    const TOTAL_STEPS = 6;
+
     setOrderStatus({
       phase: "arranging",
-      message: "Launching headed Playwright and arranging the cart.",
+      message: "Launching Playwright browser…",
       product: metroDemoData.product,
       destination,
       mode: "live-playwright",
       startedAt: new Date().toISOString(),
-    });
+      checkoutStep: 0,
+      checkoutTotalSteps: TOTAL_STEPS,
+    } as OrderStatus);
 
     const result = await runInstamartAutomation({
       product: metroDemoData.product,
       destination,
       address: metroDemoData.destinationAddresses[destination],
+      onProgress: (p) => {
+        const stepIdx = STEP_MAP[p.step] ?? 0;
+        setOrderStatus({
+          phase: p.step === "done" ? "success" : "arranging",
+          message: p.ok ? p.label : `⚠ ${p.label}`,
+          product: metroDemoData.product,
+          destination,
+          mode: "live-playwright",
+          startedAt: new Date().toISOString(),
+          checkoutStep: p.ok ? Math.min(stepIdx, TOTAL_STEPS) : stepIdx,
+          checkoutTotalSteps: TOTAL_STEPS,
+        } as OrderStatus);
+      },
     });
 
     if (!result.ok) {
-      playDemoVideoFallback(destination, `${result.message} Falling back to recorded demo.`);
+      simulateDemoCheckout(destination, `${result.message} Falling back to simulated checkout.`);
       return;
     }
 
@@ -94,12 +154,14 @@ export async function POST(request: NextRequest) {
       destination,
       mode: "live-playwright",
       completedAt: new Date().toISOString(),
-    });
+      checkoutStep: TOTAL_STEPS,
+      checkoutTotalSteps: TOTAL_STEPS,
+    } as OrderStatus);
   })()
     .catch((error: unknown) => {
-      playDemoVideoFallback(
+      simulateDemoCheckout(
         destination,
-        `${error instanceof Error ? error.message : "Playwright failed."} Falling back to recorded demo.`,
+        `${error instanceof Error ? error.message : "Playwright failed."} Falling back to simulated checkout.`,
       );
     })
     .finally(() => {

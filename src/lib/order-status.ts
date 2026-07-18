@@ -11,6 +11,8 @@ export type OrderStatus = {
   startedAt?: string;
   completedAt?: string;
   videoUrl?: string;
+  checkoutStep?: number;
+  checkoutTotalSteps?: number;
 };
 
 const initialStatus: OrderStatus = {
