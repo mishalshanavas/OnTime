@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+dist/
+
+.env
+.env*.local
+
+storageState.json
+playwright-report/
+test-results/
+
+*.log
